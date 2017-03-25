@@ -1,5 +1,5 @@
 {
-  "name": "qrcode-generator",
+  "name": "qrcode-generator-herman",
   "version": "1.1.0",
   "description": "QR Code Generator implementation in JavaScript.",
   "author": "Kazuhiko Arase",
@@ -7,7 +7,7 @@
   "types": "qrcode.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kazuhikoarase/qrcode-generator.git"
+    "url": "https://github.com/hermanho/qrcode-generator.git"
   },
   "bugs": {
     "url": "https://github.com/kazuhikoarase/qrcode-generator/issues"
