@@ -421,7 +421,38 @@ var qrcode = function() {
       return _moduleCount;
     };
 
+    _this.getModuleClone = function() {
+      let ret = [];
+      for (let i = 0; i < _modules.length; i++) {
+        ret.push([..._modules[i]]);
+      }
+      return ret;
+    }
+
     _this.make = function() {
+      //https://github.com/defunctzombie/qr.js/blob/f7a0bd275b4459afac245f08f74e2450e9f08679/lib/QRCode.js#L37
+      // Calculate automatically typeNumber if provided is < 1
+      if (_typeNumber < 1) {
+        var typeNumber = 1;
+        var buffer = qrBitBuffer();
+        for (var i = 0; i < _dataList.length; i++) {
+          var data = _dataList[i];
+          buffer.put(data.getMode(), 4);
+          buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber));
+          data.write(buffer);
+        }
+        for (typeNumber = 1; typeNumber < 40; typeNumber++) {
+          var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, _errorCorrectionLevel);
+
+          var totalDataCount = 0;
+          for (var i = 0; i < rsBlocks.length; i++) {
+            totalDataCount += rsBlocks[i].dataCount;
+          }
+          if (buffer.getLengthInBits() <= totalDataCount * 8)
+            break;
+        }
+        _typeNumber = typeNumber;
+      }
       makeImpl(false, getBestMaskPattern() );
     };
 
