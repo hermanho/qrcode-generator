@@ -36,7 +36,7 @@ var qrcode = function() {
     var _modules = null;
     var _moduleCount = 0;
     var _dataCache = null;
-    var _dataList = new Array();
+    var _dataList = [];
 
     var _this = {};
 
@@ -349,11 +349,11 @@ var qrcode = function() {
       }
 
       if (buffer.getLengthInBits() > totalDataCount * 8) {
-        throw new Error('code length overflow. ('
+        throw 'code length overflow. ('
           + buffer.getLengthInBits()
           + '>'
           + totalDataCount * 8
-          + ')');
+          + ')';
       }
 
       // end code
@@ -412,7 +412,7 @@ var qrcode = function() {
 
     _this.isDark = function(row, col) {
       if (row < 0 || _moduleCount <= row || col < 0 || _moduleCount <= col) {
-        throw new Error(row + ',' + col);
+        throw row + ',' + col;
       }
       return _modules[row][col];
     };
@@ -421,38 +421,34 @@ var qrcode = function() {
       return _moduleCount;
     };
 
-    _this.getModuleClone = function() {
-      let ret = [];
-      for (let i = 0; i < _modules.length; i++) {
-        ret.push([..._modules[i]]);
-      }
-      return ret;
-    }
-
     _this.make = function() {
-      //https://github.com/defunctzombie/qr.js/blob/f7a0bd275b4459afac245f08f74e2450e9f08679/lib/QRCode.js#L37
-      // Calculate automatically typeNumber if provided is < 1
       if (_typeNumber < 1) {
         var typeNumber = 1;
-        var buffer = qrBitBuffer();
-        for (var i = 0; i < _dataList.length; i++) {
-          var data = _dataList[i];
-          buffer.put(data.getMode(), 4);
-          buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber));
-          data.write(buffer);
-        }
-        for (typeNumber = 1; typeNumber < 40; typeNumber++) {
+
+        for (; typeNumber < 40; typeNumber++) {
           var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, _errorCorrectionLevel);
+          var buffer = qrBitBuffer();
+
+          for (var i = 0; i < _dataList.length; i++) {
+            var data = _dataList[i];
+            buffer.put(data.getMode(), 4);
+            buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+            data.write(buffer);
+          }
 
           var totalDataCount = 0;
           for (var i = 0; i < rsBlocks.length; i++) {
             totalDataCount += rsBlocks[i].dataCount;
           }
-          if (buffer.getLengthInBits() <= totalDataCount * 8)
+
+          if (buffer.getLengthInBits() <= totalDataCount * 8) {
             break;
+          }
         }
+
         _typeNumber = typeNumber;
       }
+
       makeImpl(false, getBestMaskPattern() );
     };
 
@@ -496,21 +492,50 @@ var qrcode = function() {
       return qrHtml;
     };
 
-    _this.createSvgTag = function(cellSize, margin) {
+    _this.createSvgTag = function(cellSize, margin, alt, title) {
+
+      var opts = {};
+      if (typeof arguments[0] == 'object') {
+        // Called by options.
+        opts = arguments[0];
+        // overwrite cellSize and margin.
+        cellSize = opts.cellSize;
+        margin = opts.margin;
+        alt = opts.alt;
+        title = opts.title;
+      }
 
       cellSize = cellSize || 2;
       margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      // Compose alt property surrogate
+      alt = (typeof alt === 'string') ? {text: alt} : alt || {};
+      alt.text = alt.text || null;
+      alt.id = (alt.text) ? alt.id || 'qrcode-description' : null;
+
+      // Compose title property surrogate
+      title = (typeof title === 'string') ? {text: title} : title || {};
+      title.text = title.text || null;
+      title.id = (title.text) ? title.id || 'qrcode-title' : null;
+
       var size = _this.getModuleCount() * cellSize + margin * 2;
       var c, mc, r, mr, qrSvg='', rect;
 
       rect = 'l' + cellSize + ',0 0,' + cellSize +
         ' -' + cellSize + ',0 0,-' + cellSize + 'z ';
 
-      qrSvg += '<svg';
-      qrSvg += ' width="' + size + 'px"';
-      qrSvg += ' height="' + size + 'px"';
-      qrSvg += ' xmlns="http://www.w3.org/2000/svg"';
+      qrSvg += '<svg version="1.1" xmlns="http://www.w3.org/2000/svg"';
+      qrSvg += !opts.scalable ? ' width="' + size + 'px" height="' + size + 'px"' : '';
+      qrSvg += ' viewBox="0 0 ' + size + ' ' + size + '" ';
+      qrSvg += ' preserveAspectRatio="xMinYMin meet"';
+      qrSvg += (title.text || alt.text) ? ' role="img" aria-labelledby="' +
+          escapeXml([title.id, alt.id].join(' ').trim() ) + '"' : '';
       qrSvg += '>';
+      qrSvg += (title.text) ? '<title id="' + escapeXml(title.id) + '">' +
+          escapeXml(title.text) + '</title>' : '';
+      qrSvg += (alt.text) ? '<description id="' + escapeXml(alt.id) + '">' +
+          escapeXml(alt.text) + '</description>' : '';
+      qrSvg += '<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>';
       qrSvg += '<path d="';
 
       for (r = 0; r < _this.getModuleCount(); r += 1) {
@@ -529,7 +554,7 @@ var qrcode = function() {
       return qrSvg;
     };
 
-    _this.createImgTag = function(cellSize, margin) {
+    _this.createDataURL = function(cellSize, margin) {
 
       cellSize = cellSize || 2;
       margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
@@ -538,7 +563,7 @@ var qrcode = function() {
       var min = margin;
       var max = size - margin;
 
-      return createImgTag(size, size, function(x, y) {
+      return createDataURL(size, size, function(x, y) {
         if (min <= x && x < max && min <= y && y < max) {
           var c = Math.floor( (x - min) / cellSize);
           var r = Math.floor( (y - min) / cellSize);
@@ -549,6 +574,159 @@ var qrcode = function() {
       } );
     };
 
+    _this.createImgTag = function(cellSize, margin, alt) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+
+      var img = '';
+      img += '<img';
+      img += '\u0020src="';
+      img += _this.createDataURL(cellSize, margin);
+      img += '"';
+      img += '\u0020width="';
+      img += size;
+      img += '"';
+      img += '\u0020height="';
+      img += size;
+      img += '"';
+      if (alt) {
+        img += '\u0020alt="';
+        img += escapeXml(alt);
+        img += '"';
+      }
+      img += '/>';
+
+      return img;
+    };
+
+    var escapeXml = function(s) {
+      var escaped = '';
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charAt(i);
+        switch(c) {
+        case '<': escaped += '&lt;'; break;
+        case '>': escaped += '&gt;'; break;
+        case '&': escaped += '&amp;'; break;
+        case '"': escaped += '&quot;'; break;
+        default : escaped += c; break;
+        }
+      }
+      return escaped;
+    };
+
+    var _createHalfASCII = function(margin) {
+      var cellSize = 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r1, r2, p;
+
+      var blocks = {
+        '██': '█',
+        '█ ': '▀',
+        ' █': '▄',
+        '  ': ' '
+      };
+
+      var blocksLastLineNoMargin = {
+        '██': '▀',
+        '█ ': '▀',
+        ' █': ' ',
+        '  ': ' '
+      };
+
+      var ascii = '';
+      for (y = 0; y < size; y += 2) {
+        r1 = Math.floor((y - min) / cellSize);
+        r2 = Math.floor((y + 1 - min) / cellSize);
+        for (x = 0; x < size; x += 1) {
+          p = '█';
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r1, Math.floor((x - min) / cellSize))) {
+            p = ' ';
+          }
+
+          if (min <= x && x < max && min <= y+1 && y+1 < max && _this.isDark(r2, Math.floor((x - min) / cellSize))) {
+            p += ' ';
+          }
+          else {
+            p += '█';
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          ascii += (margin < 1 && y+1 >= max) ? blocksLastLineNoMargin[p] : blocks[p];
+        }
+
+        ascii += '\n';
+      }
+
+      if (size % 2 && margin > 0) {
+        return ascii.substring(0, ascii.length - size - 1) + Array(size+1).join('▀');
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.createASCII = function(cellSize, margin) {
+      cellSize = cellSize || 1;
+
+      if (cellSize < 2) {
+        return _createHalfASCII(margin);
+      }
+
+      cellSize -= 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r, p;
+
+      var white = Array(cellSize+1).join('██');
+      var black = Array(cellSize+1).join('  ');
+
+      var ascii = '';
+      var line = '';
+      for (y = 0; y < size; y += 1) {
+        r = Math.floor( (y - min) / cellSize);
+        line = '';
+        for (x = 0; x < size; x += 1) {
+          p = 1;
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r, Math.floor((x - min) / cellSize))) {
+            p = 0;
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          line += p ? white : black;
+        }
+
+        for (r = 0; r < cellSize; r += 1) {
+          ascii += line + '\n';
+        }
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.renderTo2dContext = function(context, cellSize) {
+      cellSize = cellSize || 2;
+      var length = _this.getModuleCount();
+      for (var row = 0; row < length; row++) {
+        for (var col = 0; col < length; col++) {
+          context.fillStyle = _this.isDark(row, col) ? 'black' : 'white';
+          context.fillRect(row * cellSize, col * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+
     return _this;
   };
 
@@ -556,14 +734,18 @@ var qrcode = function() {
   // qrcode.stringToBytes
   //---------------------------------------------------------------------
 
-  qrcode.stringToBytes = function(s) {
-    var bytes = new Array();
-    for (var i = 0; i < s.length; i += 1) {
-      var c = s.charCodeAt(i);
-      bytes.push(c & 0xff);
+  qrcode.stringToBytesFuncs = {
+    'default' : function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        bytes.push(c & 0xff);
+      }
+      return bytes;
     }
-    return bytes;
   };
+
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['default'];
 
   //---------------------------------------------------------------------
   // qrcode.createStringToBytes
@@ -583,7 +765,7 @@ var qrcode = function() {
       var bin = base64DecodeInputStream(unicodeData);
       var read = function() {
         var b = bin.read();
-        if (b == -1) throw new Error();
+        if (b == -1) throw 'eof';
         return b;
       };
 
@@ -601,7 +783,7 @@ var qrcode = function() {
         count += 1;
       }
       if (count != numChars) {
-        throw new Error(count + ' != ' + numChars);
+        throw count + ' != ' + numChars;
       }
 
       return unicodeMap;
@@ -610,7 +792,7 @@ var qrcode = function() {
     var unknownChar = '?'.charCodeAt(0);
 
     return function(s) {
-      var bytes = new Array();
+      var bytes = [];
       for (var i = 0; i < s.length; i += 1) {
         var c = s.charCodeAt(i);
         if (c < 128) {
@@ -777,7 +959,7 @@ var qrcode = function() {
         return function(i, j) { return ( (i * j) % 3 + (i + j) % 2) % 2 == 0; };
 
       default :
-        throw new Error('bad maskPattern:' + maskPattern);
+        throw 'bad maskPattern:' + maskPattern;
       }
     };
 
@@ -801,7 +983,7 @@ var qrcode = function() {
         case QRMode.MODE_8BIT_BYTE : return 8;
         case QRMode.MODE_KANJI     : return 8;
         default :
-          throw new Error('mode:' + mode);
+          throw 'mode:' + mode;
         }
 
       } else if (type < 27) {
@@ -814,7 +996,7 @@ var qrcode = function() {
         case QRMode.MODE_8BIT_BYTE : return 16;
         case QRMode.MODE_KANJI     : return 10;
         default :
-          throw new Error('mode:' + mode);
+          throw 'mode:' + mode;
         }
 
       } else if (type < 41) {
@@ -827,11 +1009,11 @@ var qrcode = function() {
         case QRMode.MODE_8BIT_BYTE : return 16;
         case QRMode.MODE_KANJI     : return 12;
         default :
-          throw new Error('mode:' + mode);
+          throw 'mode:' + mode;
         }
 
       } else {
-        throw new Error('type:' + type);
+        throw 'type:' + type;
       }
     };
 
@@ -971,7 +1153,7 @@ var qrcode = function() {
     _this.glog = function(n) {
 
       if (n < 1) {
-        throw new Error('glog(' + n + ')');
+        throw 'glog(' + n + ')';
       }
 
       return LOG_TABLE[n];
@@ -1000,7 +1182,7 @@ var qrcode = function() {
   function qrPolynomial(num, shift) {
 
     if (typeof num.length == 'undefined') {
-      throw new Error(num.length + '/' + shift);
+      throw num.length + '/' + shift;
     }
 
     var _num = function() {
@@ -1346,13 +1528,13 @@ var qrcode = function() {
       var rsBlock = getRsBlockTable(typeNumber, errorCorrectionLevel);
 
       if (typeof rsBlock == 'undefined') {
-        throw new Error('bad rs block @ typeNumber:' + typeNumber +
-            '/errorCorrectionLevel:' + errorCorrectionLevel);
+        throw 'bad rs block @ typeNumber:' + typeNumber +
+            '/errorCorrectionLevel:' + errorCorrectionLevel;
       }
 
       var length = rsBlock.length / 3;
 
-      var list = new Array();
+      var list = [];
 
       for (var i = 0; i < length; i += 1) {
 
@@ -1377,7 +1559,7 @@ var qrcode = function() {
 
   var qrBitBuffer = function() {
 
-    var _buffer = new Array();
+    var _buffer = [];
     var _length = 0;
 
     var _this = {};
@@ -1575,15 +1757,20 @@ var qrcode = function() {
 
     var _mode = QRMode.MODE_KANJI;
     var _data = data;
-    var _bytes = qrcode.stringToBytes(data);
 
+    var stringToBytes = qrcode.stringToBytesFuncs['SJIS'];
+    if (!stringToBytes) {
+      throw 'sjis not supported.';
+    }
     !function(c, code) {
       // self test for sjis support.
-      var test = qrcode.stringToBytes(c);
+      var test = stringToBytes(c);
       if (test.length != 2 || ( (test[0] << 8) | test[1]) != code) {
         throw 'sjis not supported.';
       }
     }('\u53cb', 0x9746);
+
+    var _bytes = stringToBytes(data);
 
     var _this = {};
 
@@ -1638,7 +1825,7 @@ var qrcode = function() {
 
   var byteArrayOutputStream = function() {
 
-    var _bytes = new Array();
+    var _bytes = [];
 
     var _this = {};
 
@@ -1716,7 +1903,7 @@ var qrcode = function() {
       } else if (n == 63) {
         return 0x2f;
       }
-      throw new Error('n:' + n);
+      throw 'n:' + n;
     };
 
     _this.writeByte = function(n) {
@@ -1776,7 +1963,7 @@ var qrcode = function() {
           if (_buflen == 0) {
             return -1;
           }
-          throw new Error('unexpected end of file./' + _buflen);
+          throw 'unexpected end of file./' + _buflen;
         }
 
         var c = _str.charAt(_pos);
@@ -1811,7 +1998,7 @@ var qrcode = function() {
       } else if (c == 0x2f) {
         return 63;
       } else {
-        throw new Error('c:' + c);
+        throw 'c:' + c;
       }
     };
 
@@ -1913,7 +2100,7 @@ var qrcode = function() {
       _this.write = function(data, length) {
 
         if ( (data >>> length) != 0) {
-          throw new Error('length over');
+          throw 'length over';
         }
 
         while (_bitLength + length >= 8) {
@@ -2008,7 +2195,7 @@ var qrcode = function() {
 
       _this.add = function(key) {
         if (_this.contains(key) ) {
-          throw new Error('dup key:' + key);
+          throw 'dup key:' + key;
         }
         _map[key] = _size;
         _size += 1;
@@ -2032,8 +2219,7 @@ var qrcode = function() {
     return _this;
   };
 
-  var createImgTag = function(width, height, getPixel, alt) {
-
+  var createDataURL = function(width, height, getPixel) {
     var gif = gifImage(width, height);
     for (var y = 0; y < height; y += 1) {
       for (var x = 0; x < width; x += 1) {
@@ -2051,32 +2237,53 @@ var qrcode = function() {
     }
     base64.flush();
 
-    var img = '';
-    img += '<img';
-    img += '\u0020src="';
-    img += 'data:image/gif;base64,';
-    img += base64;
-    img += '"';
-    img += '\u0020width="';
-    img += width;
-    img += '"';
-    img += '\u0020height="';
-    img += height;
-    img += '"';
-    if (alt) {
-      img += '\u0020alt="';
-      img += alt;
-      img += '"';
-    }
-    img += '/>';
-
-    return img;
+    return 'data:image/gif;base64,' + base64;
   };
 
   //---------------------------------------------------------------------
   // returns qrcode function.
 
   return qrcode;
+}();
+
+// multibyte support
+!function() {
+
+  qrcode.stringToBytesFuncs['UTF-8'] = function(s) {
+    // http://stackoverflow.com/questions/18729405/how-to-convert-utf8-string-to-byte-array
+    function toUTF8Array(str) {
+      var utf8 = [];
+      for (var i=0; i < str.length; i++) {
+        var charcode = str.charCodeAt(i);
+        if (charcode < 0x80) utf8.push(charcode);
+        else if (charcode < 0x800) {
+          utf8.push(0xc0 | (charcode >> 6),
+              0x80 | (charcode & 0x3f));
+        }
+        else if (charcode < 0xd800 || charcode >= 0xe000) {
+          utf8.push(0xe0 | (charcode >> 12),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+        // surrogate pair
+        else {
+          i++;
+          // UTF-16 encodes 0x10000-0x10FFFF by
+          // subtracting 0x10000 and splitting the
+          // 20 bits of 0x0-0xFFFFF into two halves
+          charcode = 0x10000 + (((charcode & 0x3ff)<<10)
+            | (str.charCodeAt(i) & 0x3ff));
+          utf8.push(0xf0 | (charcode >>18),
+              0x80 | ((charcode>>12) & 0x3f),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+      }
+      return utf8;
+    }
+    return toUTF8Array(s);
+  };
+
 }();
 
 (function (factory) {
