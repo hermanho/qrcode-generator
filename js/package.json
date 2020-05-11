@@ -1,11 +1,6 @@
 {
-<<<<<<< HEAD
   "name": "qrcode-generator-herman",
-  "version": "1.2.0",
-=======
-  "name": "qrcode-generator",
   "version": "1.4.4",
->>>>>>> kazuhikoarase/master
   "description": "QR Code Generator implementation in JavaScript.",
   "author": "Kazuhiko Arase",
   "main": "qrcode.js",
