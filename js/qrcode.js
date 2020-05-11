@@ -421,6 +421,14 @@ var qrcode = function() {
       return _moduleCount;
     };
 
+    _this.getModuleClone = function() {
+      let ret = [];
+      for (let i = 0; i < _modules.length; i++) {
+        ret.push([..._modules[i]]);
+      }
+      return ret;
+    }
+    
     _this.make = function() {
       if (_typeNumber < 1) {
         var typeNumber = 1;
